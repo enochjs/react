@@ -268,7 +268,9 @@ function warnOnFunctionType() {
 // a compiler or we can do it manually. Helpers that don't need this branching
 // live outside of this function.
 function ChildReconciler(shouldTrackSideEffects) {
+  // 删除子节点，把要删除的节点添加到effect list上， 打标 tag = Deletion； commit阶段才会正式删除
   function deleteChild(returnFiber: Fiber, childToDelete: Fiber): void {
+    // 首次渲染
     if (!shouldTrackSideEffects) {
       // Noop.
       return;
@@ -279,16 +281,20 @@ function ChildReconciler(shouldTrackSideEffects) {
     // effects aren't added until the complete phase. Once we implement
     // resuming, this may not be true.
     const last = returnFiber.lastEffect;
+    // 将节点挂载到父节点的 Effect 链上
     if (last !== null) {
       last.nextEffect = childToDelete;
       returnFiber.lastEffect = childToDelete;
     } else {
       returnFiber.firstEffect = returnFiber.lastEffect = childToDelete;
     }
+
+    // 当前节点添加 Deletion 标记，以便在 commit 阶段进行删除
     childToDelete.nextEffect = null;
     childToDelete.effectTag = Deletion;
   }
 
+  // 删除所有包含的子节点
   function deleteRemainingChildren(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -308,6 +314,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return null;
   }
 
+  // map 包含的子节点  Map(key | index, child)
   function mapRemainingChildren(
     returnFiber: Fiber,
     currentFirstChild: Fiber,
@@ -329,6 +336,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return existingChildren;
   }
 
+  // 双缓冲策略 复用fiber 节点，使用 fiber.alternate， 因为会操作fiber，避免对当前的fiber产生影响。（个人认为是为了做diff）
   function useFiber(fiber: Fiber, pendingProps: mixed): Fiber {
     // We currently set sibling to null and index to 0 here because it is easy
     // to forget to do before returning it. E.g. for the single child case.
@@ -338,12 +346,14 @@ function ChildReconciler(shouldTrackSideEffects) {
     return clone;
   }
 
+  // 打标 Placement
   function placeChild(
     newFiber: Fiber,
     lastPlacedIndex: number,
     newIndex: number,
   ): number {
     newFiber.index = newIndex;
+    // 第一次渲染
     if (!shouldTrackSideEffects) {
       // Noop.
       return lastPlacedIndex;
@@ -366,6 +376,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     }
   }
 
+  // 单节点，直接打标 effectTag = Placement
   function placeSingleChild(newFiber: Fiber): Fiber {
     // This is simpler for the single child case. We only need to do a
     // placement for inserting new children.
@@ -375,6 +386,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return newFiber;
   }
 
+  // 更新文本节点，直接更新就行，文本节点不会有 effect 产生
   function updateTextNode(
     returnFiber: Fiber,
     current: Fiber | null,
@@ -398,6 +410,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     }
   }
 
+  // 不需要 effectTag ？？？
   function updateElement(
     returnFiber: Fiber,
     current: Fiber | null,
@@ -406,7 +419,8 @@ function ChildReconciler(shouldTrackSideEffects) {
   ): Fiber {
     if (current !== null) {
       if (
-        current.elementType === element.type ||
+        // 我记得组件 element 的 elementType 和 element.type 是一样的
+        current.elementType === element.type || 
         // Keep this check inline so it only runs on the false path:
         (__DEV__ ? isCompatibleFamilyForHotReloading(current, element) : false)
       ) {
@@ -507,6 +521,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     }
   }
 
+  // Text 、 element、portal、 array => Fragment
   function createChild(
     returnFiber: Fiber,
     newChild: any,
