@@ -419,7 +419,7 @@ function ChildReconciler(shouldTrackSideEffects) {
   ): Fiber {
     if (current !== null) {
       if (
-        // 我记得组件 element 的 elementType 和 element.type 是一样的
+        // 这里判断的是当前的节点类型和传入的 element的类型是不是一样的， 也就是判断是不是同一个组件
         current.elementType === element.type || 
         // Keep this check inline so it only runs on the false path:
         (__DEV__ ? isCompatibleFamilyForHotReloading(current, element) : false)
@@ -586,6 +586,8 @@ function ChildReconciler(shouldTrackSideEffects) {
     return null;
   }
 
+  // 很有意思的命名，更新一个槽、箱子，就是如果有的话，更新里面的箱子，没有就返回。
+  // 结论就是 如果 key相同就复用，没有就返回null
   function updateSlot(
     returnFiber: Fiber,
     oldFiber: Fiber | null,
@@ -596,6 +598,16 @@ function ChildReconciler(shouldTrackSideEffects) {
 
     const key = oldFiber !== null ? oldFiber.key : null;
 
+    /**
+     * 具体可以看updateTextNode 方法，第二个参数接收的是newFiber，
+     * updateTextNode(returnFiber: Fiber,
+        current: Fiber | null,
+        textContent: string,
+        expirationTime: ExpirationTime,
+      )
+
+      这里oldFiber就current， 如果orderFiber是文本节点就update， 如果不是，create一个新的TextNode
+     */
     if (typeof newChild === 'string' || typeof newChild === 'number') {
       // Text nodes don't have keys. If the previous node is implicitly keyed
       // we can continue to replace it without aborting even if it is not a text
@@ -611,6 +623,7 @@ function ChildReconciler(shouldTrackSideEffects) {
       );
     }
 
+    // 如果key 不同 返回null，否则更新
     if (typeof newChild === 'object' && newChild !== null) {
       switch (newChild.$$typeof) {
         case REACT_ELEMENT_TYPE: {
@@ -648,6 +661,7 @@ function ChildReconciler(shouldTrackSideEffects) {
         }
       }
 
+      // ？？？ array 没有key， 如果oldKey ！== null 说明结构变化了，直接替换，是不是这样呢？？我也不知道
       if (isArray(newChild) || getIteratorFn(newChild)) {
         if (key !== null) {
           return null;
@@ -674,6 +688,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return null;
   }
 
+  // 我也喜欢干这种事，把list转为map，其实就是为了提高效率。
   function updateFromMap(
     existingChildren: Map<string | number, Fiber>,
     returnFiber: Fiber,
@@ -681,6 +696,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     newChild: any,
     expirationTime: ExpirationTime,
   ): Fiber | null {
+    // 文本节点 ？？？ 文本节点怎么 match？？
     if (typeof newChild === 'string' || typeof newChild === 'number') {
       // Text nodes don't have keys, so we neither have to check the old nor
       // new node for the key. If both are text nodes, they match.
@@ -797,6 +813,10 @@ function ChildReconciler(shouldTrackSideEffects) {
     return knownKeys;
   }
 
+  /**
+   * newChildren newfiber 中的所有子节点，理论上直接下掉老的节点，渲染新的节点就可以了，但是为了优化，复用了所有能复用的节点
+   * newChildren ？？？ reactElement
+   */
   function reconcileChildrenArray(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -838,7 +858,13 @@ function ChildReconciler(shouldTrackSideEffects) {
     let lastPlacedIndex = 0;
     let newIdx = 0;
     let nextOldFiber = null;
+    /**
+     * 这里我认为是一个优化的方法，遍历列表，如果老的还可以复用就复用，遇到了第一不能复用的就停止，如果列表都可以复用，效率就会很高，如果变化了页无妨，记录下没变化的 index，继续下面的操作
+     * 应该是出于react的设计哲学，react认为，交互的过程中，dom结果发生变化的情况是比较少的，如果发生变化，基本上都是很大的变化，几乎无法复用的情况。
+     */
     for (; oldFiber !== null && newIdx < newChildren.length; newIdx++) {
+      // 为什么要加这个判断？不理解啊，不是只有olderFirber的list大于 newChildren的时候才会出现么？这个时候，循环不是已经结束了么？？？那么为什么要加呢？？？
+      // 好像为了后面好判断也没必要啊， 遍历到这里 oldFiber.silbing 不是一定为null么？？？？
       if (oldFiber.index > newIdx) {
         nextOldFiber = oldFiber;
         oldFiber = null;
@@ -862,6 +888,8 @@ function ChildReconciler(shouldTrackSideEffects) {
         break;
       }
       if (shouldTrackSideEffects) {
+        // 如果是第一次加载，我们匹配到了老的节点，但是newFiber.alternate === null 说明是一个新建的fiber，所以老节点不能复用，就需要把所有的子节点都删除
+        // 我并不理解什么样的场景会出现
         if (oldFiber && newFiber.alternate === null) {
           // We matched the slot, but we didn't reuse the existing fiber, so we
           // need to delete the existing child.
@@ -889,6 +917,7 @@ function ChildReconciler(shouldTrackSideEffects) {
       return resultingFirstChild;
     }
 
+    // 老节点已经复用完了
     if (oldFiber === null) {
       // If we don't have any more existing children we can choose a fast path
       // since the rest will all be insertions.
