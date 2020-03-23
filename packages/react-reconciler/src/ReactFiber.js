@@ -715,6 +715,8 @@ export function createFiberFromTypeAndProps(
               }
           }
         }
+
+        
         let info = '';
         if (__DEV__) {
           if (
