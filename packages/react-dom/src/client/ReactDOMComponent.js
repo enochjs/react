@@ -9,7 +9,6 @@
 
 import {registrationNameModules} from 'legacy-events/EventPluginRegistry';
 import {canUseDOM} from 'shared/ExecutionEnvironment';
-import endsWith from 'shared/endsWith';
 import invariant from 'shared/invariant';
 import {setListenToResponderEventTypes} from '../events/DeprecatedDOMEventResponderSystem';
 
@@ -1327,6 +1326,11 @@ export function restoreControlledState(
   }
 }
 
+function endsWith(subject: string, search: string): boolean {
+  const length = subject.length;
+  return subject.substring(length - search.length, length) === search;
+}
+
 export function listenToEventResponderEventTypes(
   eventTypes: Array<string>,
   document: Document,
@@ -1365,7 +1369,6 @@ export function listenToEventResponderEventTypes(
               (targetEventType: any),
               true,
               passiveItem.listener,
-              true,
             );
             listenerMap.delete(passiveKey);
           }

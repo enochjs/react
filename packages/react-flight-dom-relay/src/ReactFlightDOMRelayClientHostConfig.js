@@ -8,8 +8,12 @@
  */
 
 export {
+  resolveModuleReference,
   preloadModule,
   requireModule,
 } from 'ReactFlightDOMRelayClientIntegration';
 
-export type {ModuleMetaData} from 'ReactFlightDOMRelayClientIntegration';
+export type {
+  ModuleReference,
+  ModuleMetaData,
+} from 'ReactFlightDOMRelayClientIntegration';

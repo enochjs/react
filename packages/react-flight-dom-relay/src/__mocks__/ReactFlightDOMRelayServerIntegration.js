@@ -23,7 +23,7 @@ const ReactFlightDOMRelayServerIntegration = {
     });
   },
   close(destination) {},
-  resolveResourceMetaData(resource) {
+  resolveModuleMetaData(resource) {
     return resource;
   },
 };
