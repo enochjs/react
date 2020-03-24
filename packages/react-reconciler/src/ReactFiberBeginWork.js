@@ -2773,6 +2773,8 @@ export function markWorkInProgressReceivedUpdate() {
   didReceiveUpdate = true;
 }
 
+// 调用这个方法，就说明当前节点是不需要更新的
+// 如果childExpirationTime < renderExpirationTime, 说明子节点需要更新
 function bailoutOnAlreadyFinishedWork(
   current: Fiber | null,
   workInProgress: Fiber,
