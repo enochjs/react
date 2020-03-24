@@ -16,6 +16,8 @@
 
 import type {ReactModelRoot} from 'react-client/flight';
 
+import {readModule} from 'react-noop-renderer/flight-modules';
+
 import ReactFlightClient from 'react-client/flight';
 
 type Source = Array<string>;
@@ -27,6 +29,13 @@ const {
   close,
 } = ReactFlightClient({
   supportsBinaryStreams: false,
+  resolveModuleReference(idx: string) {
+    return idx;
+  },
+  preloadModule(idx: string) {},
+  requireModule(idx: string) {
+    return readModule(idx);
+  },
 });
 
 function read<T>(source: Source): ReactModelRoot<T> {

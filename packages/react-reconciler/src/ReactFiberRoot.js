@@ -9,7 +9,7 @@
 
 import type {Fiber} from './ReactFiber';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
-import type {RootTag} from 'shared/ReactRootTags';
+import type {RootTag} from 'react-reconciler/src/ReactRootTags';
 import type {TimeoutHandle, NoTimeout} from './ReactFiberHostConfig';
 import type {Thenable} from './ReactFiberWorkLoop';
 import type {Interaction} from 'scheduler/src/Tracing';
@@ -161,6 +161,7 @@ export function createFiberRoot(
   return root;
 }
 
+// root.firstSuspendedTime <= expirationTime <= root.lastSuspendedTime expirationTime !== nowork
 export function isRootSuspendedAtTime(
   root: FiberRoot,
   expirationTime: ExpirationTime,
@@ -259,6 +260,7 @@ export function markRootFinishedAtTime(
   clearPendingMutableSourceUpdates(root, finishedExpirationTime);
 }
 
+// 标记过期时间，只有当任务过期时，改方法才会被调用
 export function markRootExpiredAtTime(
   root: FiberRoot,
   expirationTime: ExpirationTime,
