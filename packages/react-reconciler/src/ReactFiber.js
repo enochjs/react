@@ -138,6 +138,31 @@ export type Fiber = {|
   // minimize the number of objects created during the initial render.
 
   // Tag identifying the type of fiber.
+  /**
+    export const FunctionComponent = 0;
+    export const ClassComponent = 1;
+    export const IndeterminateComponent = 2; // Before we know whether it is function or class
+    export const HostRoot = 3; // Root of a host tree. Could be nested inside another node.
+    export const HostPortal = 4; // A subtree. Could be an entry point to a different renderer.
+    export const HostComponent = 5;
+    export const HostText = 6;
+    export const Fragment = 7;
+    export const Mode = 8;
+    export const ContextConsumer = 9;
+    export const ContextProvider = 10;
+    export const ForwardRef = 11;
+    export const Profiler = 12;
+    export const SuspenseComponent = 13;
+    export const MemoComponent = 14;
+    export const SimpleMemoComponent = 15;
+    export const LazyComponent = 16;
+    export const IncompleteClassComponent = 17;
+    export const DehydratedFragment = 18;
+    export const SuspenseListComponent = 19;
+    export const FundamentalComponent = 20;
+    export const ScopeComponent = 21;
+    export const Block = 22;
+   */
   tag: WorkTag,
 
   // Unique identifier of this child.
@@ -145,6 +170,7 @@ export type Fiber = {|
 
   // The value of element.type which is used to preserve the identity during
   // reconciliation of this child.
+  // fiber.elementType === element.type  主要是用来确保update的时候key相同时，type也是相同的，（因为key往往是不可信的，key相同可能也已经被改掉了，如list的时候用index做key）
   elementType: any,
 
   // The resolved function/class/ associated with this fiber.
@@ -199,6 +225,28 @@ export type Fiber = {|
   mode: TypeOfMode,
 
   // Effect
+  /**
+        export const NoEffect =             0b0000000000000;
+        export const PerformedWork =        0b0000000000001;
+        export const Placement =            0b0000000000010;
+        export const Update =               0b0000000000100;
+        export const PlacementAndUpdate =   0b0000000000110;
+        export const Deletion =             0b0000000001000;
+        export const ContentReset =         0b0000000010000;
+        export const Callback =             0b0000000100000;
+        export const DidCapture =           0b0000001000000;
+        export const Ref =                  0b0000010000000;
+        export const Snapshot =             0b0000100000000;
+        export const Passive =              0b0001000000000;
+        export const Hydrating =            0b0010000000000;
+        export const HydratingAndUpdate =   0b0010000000100;
+        // Passive & Update & Callback & Ref & Snapshot
+        export const LifecycleEffectMask =  0b0001110100100;
+        // Union of all host effects
+        export const HostEffectMask = 0b0011111111111;
+        export const Incomplete = 0b0100000000000;
+        export const ShouldCapture = 0b1000000000000;
+   */
   effectTag: SideEffectTag,
 
   // Singly linked list fast path to the next fiber with side-effects.
@@ -402,6 +450,7 @@ export function resolveLazyComponentTag(Component: Function): WorkTag {
 }
 
 // This is used to create an alternate fiber to do work on.
+// 创建一个fiber work
 export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
   let workInProgress = current.alternate;
   if (workInProgress === null) {
@@ -533,6 +582,7 @@ export function resetWorkInProgress(
 
   // Reset the effect tag but keep any Placement tags, since that's something
   // that child fiber is setting, not the reconciliation.
+  // ？？？为什么要保留palcement呢？  意思说字节的的fiber设置了，但还没有调度，没懂？
   workInProgress.effectTag &= Placement;
 
   // The effect list is no longer valid.

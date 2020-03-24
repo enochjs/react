@@ -696,7 +696,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     newChild: any,
     expirationTime: ExpirationTime,
   ): Fiber | null {
-    // 文本节点 ？？？ 文本节点怎么 match？？
+    // 如果他是文本节点，因为文本节点没有key，所以只能简单的查一下同index的olderFiber 是不是 文本节点，如果是复用，如果不是直接更新
     if (typeof newChild === 'string' || typeof newChild === 'number') {
       // Text nodes don't have keys, so we neither have to check the old nor
       // new node for the key. If both are text nodes, they match.
@@ -708,7 +708,7 @@ function ChildReconciler(shouldTrackSideEffects) {
         expirationTime,
       );
     }
-
+    // map 可以或者index
     if (typeof newChild === 'object' && newChild !== null) {
       switch (newChild.$$typeof) {
         case REACT_ELEMENT_TYPE: {
@@ -814,8 +814,15 @@ function ChildReconciler(shouldTrackSideEffects) {
   }
 
   /**
-   * newChildren newfiber 中的所有子节点，理论上直接下掉老的节点，渲染新的节点就可以了，但是为了优化，复用了所有能复用的节点
-   * newChildren ？？？ reactElement
+   * 整个逻辑是这样的
+   * 1、首先假设dom结构都没有变化，那么直接遍历list update fiber；如果遇到了发生变化的节点（key不同就认为不同），那么后面就不执行了，跳出循环，否则遍历结束
+   * 2、跳出循环之后
+   *    如果 newChildren.length === newIdx；也就是说dom没有变化，将结果返回
+   *    如果oldFiber === null 说明老节点都复用了（这种情况也就是在结尾添加数据了），将newChildren中还剩下的child， createChild 并 加入到结果中
+   *    如果 oldFiber !== null 说明结构变了（也就是1条件break了），为了优化，现将olderFiber生成一个map <key | index, fiber>, 继续虫newIdx开始更新后面的children，有就复用，没有就新建
+   *    结束，返回结果
+   * 
+   * 总结：理论上通过map就可以做到更新newChildren了，但是为了更好的复用（react的设计哲学，结构要么不变，要么推翻），先执行1，否则继续执行2
    */
   function reconcileChildrenArray(
     returnFiber: Fiber,
@@ -865,6 +872,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     for (; oldFiber !== null && newIdx < newChildren.length; newIdx++) {
       // 为什么要加这个判断？不理解啊，不是只有olderFirber的list大于 newChildren的时候才会出现么？这个时候，循环不是已经结束了么？？？那么为什么要加呢？？？
       // 好像为了后面好判断也没必要啊， 遍历到这里 oldFiber.silbing 不是一定为null么？？？？
+      // 如果olderFiber.length < newChildren.length; oldFiber已经是null了啊（最后一个fiber的sibling是null），不能理解
       if (oldFiber.index > newIdx) {
         nextOldFiber = oldFiber;
         oldFiber = null;
@@ -985,6 +993,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return resultingFirstChild;
   }
 
+  // iterator
   function reconcileChildrenIterator(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -1176,6 +1185,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return resultingFirstChild;
   }
 
+  // 更新单个文本节点，没啥好说的，就是判断 currentFirstChild 是不是HostText，是就复用，不是就create，
   function reconcileSingleTextNode(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -1187,6 +1197,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     if (currentFirstChild !== null && currentFirstChild.tag === HostText) {
       // We already have an existing node so let's just update it and delete
       // the rest.
+      // 因为是single 如果currentFible还有sibling 删除
       deleteRemainingChildren(returnFiber, currentFirstChild.sibling);
       const existing = useFiber(currentFirstChild, textContent);
       existing.return = returnFiber;
@@ -1203,7 +1214,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     created.return = returnFiber;
     return created;
   }
-
+  
   function reconcileSingleElement(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -1348,6 +1359,7 @@ function ChildReconciler(shouldTrackSideEffects) {
   // This API will tag the children with the side-effect of the reconciliation
   // itself. They will be added to the side-effect list as we pass through the
   // children and the parent.
+  // react 的节点只可能是 node 或者nodeArry； nodeArray 也只可能有node ，不存在二维数组的情况，因为每一个list都必须🈶️一个root
   function reconcileChildFibers(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,

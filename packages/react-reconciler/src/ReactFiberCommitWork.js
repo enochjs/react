@@ -541,6 +541,11 @@ export function commitPassiveEffectDurations(
   }
 }
 
+// UpdateEffect PassiveEffect
+
+// HookLayout
+// commitHookEffectListMount
+
 function commitLifeCycles(
   finishedRoot: FiberRoot,
   current: Fiber | null,

@@ -20,6 +20,8 @@ import {
   warnAboutDeprecatedLifecycles,
   deferPassiveEffectCleanupDuringUnmount,
   runAllPassiveEffectDestroysBeforeCreates,
+
+  
   enableUserTimingAPI,
   enableSuspenseServerRenderer,
   replayFailedUnitOfWorkWithInvokeGuardedCallback,
@@ -306,17 +308,21 @@ export function getWorkInProgressRoot(): FiberRoot | null {
   return workInProgressRoot;
 }
 
+// 请求当前时间
 export function requestCurrentTimeForUpdate() {
+  // 当前执行环境在react对象中，存在renderContext 和commitContext 
   if ((executionContext & (RenderContext | CommitContext)) !== NoContext) {
     // We're inside React, so it's fine to read the actual time.
     return msToExpirationTime(now());
   }
   // We're not inside React, so we may be in the middle of a browser event.
+  // 不在react对象中，用开始设置的时间，直到再次进入react中
   if (currentEventTime !== NoWork) {
     // Use the same start time for all updates until we enter React again.
     return currentEventTime;
   }
   // This is the first update since React yielded. Compute a new start time.
+  // 第一次
   currentEventTime = msToExpirationTime(now());
   return currentEventTime;
 }
@@ -331,11 +337,13 @@ export function computeExpirationForFiber(
   suspenseConfig: null | SuspenseConfig,
 ): ExpirationTime {
   const mode = fiber.mode;
+  // mode 中没有 BlockingMode
   if ((mode & BlockingMode) === NoMode) {
     return Sync;
   }
 
   const priorityLevel = getCurrentPriorityLevel();
+  // 是blockingMode 且不是ConcurrentMode
   if ((mode & ConcurrentMode) === NoMode) {
     return priorityLevel === ImmediatePriority ? Sync : Batched;
   }
