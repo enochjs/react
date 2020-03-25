@@ -201,12 +201,14 @@ type Dispatch<A> = A => void;
 let renderExpirationTime: ExpirationTime = NoWork;
 // The work-in-progress fiber. I've named it differently to distinguish it from
 // the work-in-progress hook.
+// work-in-progress fiber
 let currentlyRenderingFiber: Fiber = (null: any);
 
 // Hooks are stored as a linked list on the fiber's memoizedState field. The
 // current hook list is the list that belongs to the current fiber. The
 // work-in-progress hook list is a new list that will be added to the
 // work-in-progress fiber.
+// 看这个注释咋就好奇怪呢，也就是说currentHook 和 workInProgressHook 是完全独立的两个list？？？
 let currentHook: Hook | null = null;
 let workInProgressHook: Hook | null = null;
 
@@ -214,6 +216,7 @@ let workInProgressHook: Hook | null = null;
 // does not get reset if we do another render pass; only when we're completely
 // finished evaluating this component. This is an optimization so we know
 // whether we need to clear render phase updates after a throw.
+// render 阶段 任何一个update被调用的时候，设为true， 表示这个hook执行过了，即使进入到了别的hook？？？ 不知道为啥
 let didScheduleRenderPhaseUpdate: boolean = false;
 
 const RE_RENDER_LIMIT = 25;
@@ -331,6 +334,7 @@ function throwInvalidHookError() {
   );
 }
 
+// 浅比较 nextDeps和 prevDeps 
 function areHookInputsEqual(
   nextDeps: Array<mixed>,
   prevDeps: Array<mixed> | null,
@@ -378,6 +382,7 @@ function areHookInputsEqual(
   return true;
 }
 
+// hooks render
 export function renderWithHooks<Props, SecondArg>(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -387,6 +392,7 @@ export function renderWithHooks<Props, SecondArg>(
   nextRenderExpirationTime: ExpirationTime,
 ): any {
   renderExpirationTime = nextRenderExpirationTime;
+  // 设置当前的 currentlyRenderingFiber 
   currentlyRenderingFiber = workInProgress;
 
   if (__DEV__) {
@@ -431,6 +437,7 @@ export function renderWithHooks<Props, SecondArg>(
       ReactCurrentDispatcher.current = HooksDispatcherOnMountInDEV;
     }
   } else {
+    // current === null || current.memoizedState 表示第一次加载
     ReactCurrentDispatcher.current =
       current === null || current.memoizedState === null
         ? HooksDispatcherOnMount
@@ -444,6 +451,11 @@ export function renderWithHooks<Props, SecondArg>(
     // Keep rendering in a loop for as long as render phase updates continue to
     // be scheduled. Use a counter to prevent infinite loops.
     let numberOfReRenders: number = 0;
+
+    // 这种神奇的do while 什么作用呢？
+    // 我理解就是 children = Component(props, secondArg)这东西的执行出了什么异常，然后就重新执行
+    // 但是我还是不能理解这玩意 workInProgress.expirationTime = NoWork;
+    // 难道说component 执行的时候会触发 workInProgress的改变？？？
     do {
       workInProgress.expirationTime = NoWork;
 
@@ -489,6 +501,7 @@ export function renderWithHooks<Props, SecondArg>(
 
   // This check uses currentHook so that it works the same in DEV and prod bundles.
   // hookTypesDev could catch more cases (e.g. context) but only in DEV bundles.
+  // 报错提示用的，说明hooks还没执行完
   const didRenderTooFewHooks =
     currentHook !== null && currentHook.next !== null;
 
@@ -514,6 +527,8 @@ export function renderWithHooks<Props, SecondArg>(
 
   return children;
 }
+
+
 
 export function bailoutHooks(
   current: Fiber,
@@ -567,6 +582,12 @@ export function resetHooksAfterThrow(): void {
   didScheduleRenderPhaseUpdate = false;
 }
 
+/**
+ * workInProgressHook 永远都是当前工作的hook
+ * mount workInProgressHook
+ * 如果没有 workInProgressHook 设置 currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
+ * 如果有，设置成当前的hook
+ */
 function mountWorkInProgressHook(): Hook {
   const hook: Hook = {
     memoizedState: null,
@@ -580,9 +601,11 @@ function mountWorkInProgressHook(): Hook {
 
   if (workInProgressHook === null) {
     // This is the first hook in the list
+    // fiber.memoizedState = workInProgressHook = hook,所以只要mount了之后，memoizedState 一定有值
     currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
   } else {
     // Append to the end of the list
+    // 为什么要这么写？？？ 为什么不直接 workInProgressHook = hook，嗯。。可能是为了清空next，传说中的c语言手动回收系列？
     workInProgressHook = workInProgressHook.next = hook;
   }
   return workInProgressHook;
@@ -595,6 +618,8 @@ function updateWorkInProgressHook(): Hook {
   // use as a base. When we reach the end of the base list, we must switch to
   // the dispatcher used for mounts.
   let nextCurrentHook: null | Hook;
+  // 如果currentHook 没有的话， 从curretnFiber中取，curretnFiber = currentlyRenderingFiber.alternate；
+  // hooks 中 currentlyRenderingFiber就对应workInProgressFiber
   if (currentHook === null) {
     let current = currentlyRenderingFiber.alternate;
     if (current !== null) {
@@ -613,13 +638,14 @@ function updateWorkInProgressHook(): Hook {
     nextWorkInProgressHook = workInProgressHook.next;
   }
 
+  // currentlyRenderingFiber.memoizedState || workInProgressHook.next 表示已经在work进程中，复用之前的数据
   if (nextWorkInProgressHook !== null) {
     // There's already a work-in-progress. Reuse it.
     workInProgressHook = nextWorkInProgressHook;
     nextWorkInProgressHook = workInProgressHook.next;
 
     currentHook = nextCurrentHook;
-  } else {
+  } else { // 没用的话，从current hook中 copy
     // Clone from the current hook.
 
     invariant(
@@ -628,6 +654,8 @@ function updateWorkInProgressHook(): Hook {
     );
     currentHook = nextCurrentHook;
 
+    // 这里 currentHook 和 workInProgressHook 不会出问题么？比如我改了workInProgressHook.memoizedState????
+    // 难道说memoizedState 的触发时机能保证不出问题？
     const newHook: Hook = {
       memoizedState: currentHook.memoizedState,
 
@@ -649,6 +677,7 @@ function updateWorkInProgressHook(): Hook {
   return workInProgressHook;
 }
 
+// updateQueue
 function createFunctionComponentUpdateQueue(): FunctionComponentUpdateQueue {
   return {
     lastEffect: null,
@@ -687,6 +716,7 @@ function mountReducer<S, I, A>(
   return [hook.memoizedState, dispatch];
 }
 
+// 首先合并baseQueue 和pendingQueue，然后遍历baseQueue， 如果到了过期时间就更新并执行update， 没到就只更新update
 function updateReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -743,6 +773,7 @@ function updateReducer<S, I, A>(
     let update = first;
     do {
       const updateExpirationTime = update.expirationTime;
+      // 没到过期时间，优先级不足，跳过update
       if (updateExpirationTime < renderExpirationTime) {
         // Priority is insufficient. Skip this update. If this is the first
         // skipped update, the previous update/state is the new base
@@ -762,13 +793,14 @@ function updateReducer<S, I, A>(
           newBaseQueueLast = newBaseQueueLast.next = clone;
         }
         // Update the remaining priority in the queue.
+        // 更新的过期时间大于 fiber的过期时间 设置 fiber.expirationTime = updateExpirationTime
         if (updateExpirationTime > currentlyRenderingFiber.expirationTime) {
           currentlyRenderingFiber.expirationTime = updateExpirationTime;
           markUnprocessedUpdateTime(updateExpirationTime);
         }
       } else {
         // This update does have sufficient priority.
-
+        // 到了过期时间
         if (newBaseQueueLast !== null) {
           const clone: Update<S, A> = {
             expirationTime: Sync, // This update is going to be committed so we never want uncommit it.
@@ -793,6 +825,7 @@ function updateReducer<S, I, A>(
         );
 
         // Process this update.
+        // 如果当前的 reducer 是 eagerReducer，表示已经执行过了，直接读取update.eagerState
         if (update.eagerReducer === reducer) {
           // If this update was processed eagerly, and its reducer matches the
           // current reducer, we can use the eagerly computed state.
@@ -803,7 +836,7 @@ function updateReducer<S, I, A>(
         }
       }
       update = update.next;
-    } while (update !== null && update !== first);
+    } while (update !== null && update !== first); // update === null 或者 update === first 表示执行完毕
 
     if (newBaseQueueLast === null) {
       newBaseState = newState;
@@ -813,6 +846,7 @@ function updateReducer<S, I, A>(
 
     // Mark that the fiber performed work, but only if the new state is
     // different from the current state.
+    // 新的state 和 memoizedState 的时候 设置didReceiveUpdate = true
     if (!is(newState, hook.memoizedState)) {
       markWorkInProgressReceivedUpdate();
     }
@@ -1138,6 +1172,7 @@ function rerenderState<S>(
   return rerenderReducer(basicStateReducer, (initialState: any));
 }
 
+// list环  first -> next ->... -> last -> first，创建effect，加入链表，并返回生成effect
 function pushEffect(tag, create, destroy, deps) {
   const effect: Effect = {
     tag,
@@ -1166,6 +1201,7 @@ function pushEffect(tag, create, destroy, deps) {
   return effect;
 }
 
+// hook.memoizedState = ref
 function mountRef<T>(initialValue: T): {|current: T|} {
   const hook = mountWorkInProgressHook();
   const ref = {current: initialValue};
@@ -1198,6 +1234,7 @@ function updateEffectImpl(fiberEffectTag, hookEffectTag, create, deps): void {
   const nextDeps = deps === undefined ? null : deps;
   let destroy = undefined;
 
+  // 当前有hook， 
   if (currentHook !== null) {
     const prevEffect = currentHook.memoizedState;
     destroy = prevEffect.destroy;
@@ -1842,7 +1879,6 @@ const HooksDispatcherOnUpdate: Dispatcher = {
 
 const HooksDispatcherOnRerender: Dispatcher = {
   readContext,
-
   useCallback: updateCallback,
   useContext: readContext,
   useEffect: updateEffect,
