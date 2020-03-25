@@ -182,6 +182,7 @@ export type Fiber = {|
   updateQueue: UpdateQueue<any> | null,
 
   // The state used to create the output
+  // 在hooks中，貌似是一个hook
   memoizedState: any,
 
   // Dependencies (contexts, events) for this fiber, if it has any
