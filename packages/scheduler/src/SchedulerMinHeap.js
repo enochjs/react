@@ -13,17 +13,21 @@ type Node = {|
   sortIndex: number,
 |};
 
+// 
 export function push(heap: Heap, node: Node): void {
   const index = heap.length;
   heap.push(node);
   siftUp(heap, node, index);
 }
 
+// return heap[0] || unll
 export function peek(heap: Heap): Node | null {
   const first = heap[0];
   return first === undefined ? null : first;
 }
 
+// [0,1 ,2,3]
+//
 export function pop(heap: Heap): Node | null {
   const first = heap[0];
   if (first !== undefined) {

@@ -78,6 +78,7 @@ var isPerformingWork = false;
 var isHostCallbackScheduled = false;
 var isHostTimeoutScheduled = false;
 
+// 将timerQueue中可以开始的任务放到 taskQueue里
 function advanceTimers(currentTime) {
   // Check for tasks that are no longer delayed and add them to the queue.
   let timer = peek(timerQueue);
@@ -292,6 +293,8 @@ function timeoutForPriorityLevel(priorityLevel) {
   }
 }
 
+// 将callcback push 到timerQueue，并开始新的工作
+// 如果都没有任务到时间就 requestHostTimeout， 否则 requestHostCallback
 function unstable_scheduleCallback(priorityLevel, callback, options) {
   var currentTime = getCurrentTime();
 
@@ -327,10 +330,13 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     newTask.isQueued = false;
   }
 
+  // 如果startTime > startTime说明是个延迟任务
   if (startTime > currentTime) {
     // This is a delayed task.
     newTask.sortIndex = startTime;
+    // pus到timerQueue 中
     push(timerQueue, newTask);
+    // 所有的taskQueue都清空了， 而且 timerQueue，是第一个，如果isHostTimeoutScheduled，取消之前的，重新设置requestHostTimeout
     if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
       // All tasks are delayed, and this is the task with the earliest delay.
       if (isHostTimeoutScheduled) {
@@ -344,6 +350,7 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     }
   } else {
     newTask.sortIndex = expirationTime;
+    // 当前时间大于等于任务开始时间 push到taskQueue
     push(taskQueue, newTask);
     if (enableProfiling) {
       markTaskStart(newTask, currentTime);
@@ -351,6 +358,7 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     }
     // Schedule a host callback, if needed. If we're already performing work,
     // wait until the next time we yield.
+    // 没有任务在执行， 执行requestHostCallback
     if (!isHostCallbackScheduled && !isPerformingWork) {
       isHostCallbackScheduled = true;
       requestHostCallback(flushWork);
