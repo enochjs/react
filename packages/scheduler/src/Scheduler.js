@@ -167,12 +167,10 @@ function workLoop(hasTimeRemaining, initialTime) {
   advanceTimers(currentTime);
   currentTask = peek(taskQueue);
   while (
-    currentTask !== null &&
-    !(enableSchedulerDebugging && isSchedulerPaused)
+    currentTask !== null && !(enableSchedulerDebugging && isSchedulerPaused)
   ) {
     if (
-      currentTask.expirationTime > currentTime &&
-      (!hasTimeRemaining || shouldYieldToHost())
+      currentTask.expirationTime > currentTime && (!hasTimeRemaining || shouldYieldToHost())
     ) {
       // This currentTask hasn't expired, and we've reached the deadline.
       break;
@@ -183,8 +181,10 @@ function workLoop(hasTimeRemaining, initialTime) {
       currentPriorityLevel = currentTask.priorityLevel;
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
       markTaskRun(currentTask, currentTime);
+      // 执行callback，应该在concurrent模式下才会触发
       const continuationCallback = callback(didUserCallbackTimeout);
       currentTime = getCurrentTime();
+      // 如果任务没执行完，标记交出执行权
       if (typeof continuationCallback === 'function') {
         currentTask.callback = continuationCallback;
         markTaskYield(currentTask, currentTime);
@@ -194,11 +194,13 @@ function workLoop(hasTimeRemaining, initialTime) {
           currentTask.isQueued = false;
         }
         if (currentTask === peek(taskQueue)) {
+          // 执行完毕，从任务队列中删除
           pop(taskQueue);
         }
       }
       advanceTimers(currentTime);
     } else {
+      // callback 没有，应该是任务已经取消了
       pop(taskQueue);
     }
     currentTask = peek(taskQueue);
@@ -207,6 +209,7 @@ function workLoop(hasTimeRemaining, initialTime) {
   if (currentTask !== null) {
     return true;
   } else {
+    // 如果任务队列执行完了，执行 requestHostTimeout，handleTimeout
     let firstTimer = peek(timerQueue);
     if (firstTimer !== null) {
       requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
@@ -408,13 +411,14 @@ function unstable_shouldYield() {
   advanceTimers(currentTime);
   const firstTask = peek(taskQueue);
   return (
-    (firstTask !== currentTask &&
+    (
+      firstTask !== currentTask &&
       currentTask !== null &&
       firstTask !== null &&
       firstTask.callback !== null &&
       firstTask.startTime <= currentTime &&
-      firstTask.expirationTime < currentTask.expirationTime) ||
-    shouldYieldToHost()
+      firstTask.expirationTime < currentTask.expirationTime
+    ) || shouldYieldToHost()
   );
 }
 
