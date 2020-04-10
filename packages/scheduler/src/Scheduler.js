@@ -78,6 +78,7 @@ var isPerformingWork = false;
 var isHostCallbackScheduled = false;
 var isHostTimeoutScheduled = false;
 
+// 将timerQueue中可以开始的任务放到 taskQueue里
 function advanceTimers(currentTime) {
   // Check for tasks that are no longer delayed and add them to the queue.
   let timer = peek(timerQueue);
@@ -166,12 +167,10 @@ function workLoop(hasTimeRemaining, initialTime) {
   advanceTimers(currentTime);
   currentTask = peek(taskQueue);
   while (
-    currentTask !== null &&
-    !(enableSchedulerDebugging && isSchedulerPaused)
+    currentTask !== null && !(enableSchedulerDebugging && isSchedulerPaused)
   ) {
     if (
-      currentTask.expirationTime > currentTime &&
-      (!hasTimeRemaining || shouldYieldToHost())
+      currentTask.expirationTime > currentTime && (!hasTimeRemaining || shouldYieldToHost())
     ) {
       // This currentTask hasn't expired, and we've reached the deadline.
       break;
@@ -182,8 +181,10 @@ function workLoop(hasTimeRemaining, initialTime) {
       currentPriorityLevel = currentTask.priorityLevel;
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
       markTaskRun(currentTask, currentTime);
+      // 执行callback，应该在concurrent模式下才会触发
       const continuationCallback = callback(didUserCallbackTimeout);
       currentTime = getCurrentTime();
+      // 如果任务没执行完，标记交出执行权
       if (typeof continuationCallback === 'function') {
         currentTask.callback = continuationCallback;
         markTaskYield(currentTask, currentTime);
@@ -193,11 +194,13 @@ function workLoop(hasTimeRemaining, initialTime) {
           currentTask.isQueued = false;
         }
         if (currentTask === peek(taskQueue)) {
+          // 执行完毕，从任务队列中删除
           pop(taskQueue);
         }
       }
       advanceTimers(currentTime);
     } else {
+      // callback 没有，应该是任务已经取消了
       pop(taskQueue);
     }
     currentTask = peek(taskQueue);
@@ -206,6 +209,7 @@ function workLoop(hasTimeRemaining, initialTime) {
   if (currentTask !== null) {
     return true;
   } else {
+    // 如果任务队列执行完了，执行 requestHostTimeout，handleTimeout
     let firstTimer = peek(timerQueue);
     if (firstTimer !== null) {
       requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
@@ -292,6 +296,8 @@ function timeoutForPriorityLevel(priorityLevel) {
   }
 }
 
+// 将callcback push 到timerQueue，并开始新的工作
+// 如果都没有任务到时间就 requestHostTimeout， 否则 requestHostCallback
 function unstable_scheduleCallback(priorityLevel, callback, options) {
   var currentTime = getCurrentTime();
 
@@ -327,10 +333,13 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     newTask.isQueued = false;
   }
 
+  // 如果startTime > startTime说明是个延迟任务
   if (startTime > currentTime) {
     // This is a delayed task.
     newTask.sortIndex = startTime;
+    // pus到timerQueue 中
     push(timerQueue, newTask);
+    // 所有的taskQueue都清空了， 而且 timerQueue，是第一个，如果isHostTimeoutScheduled，取消之前的，重新设置requestHostTimeout
     if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
       // All tasks are delayed, and this is the task with the earliest delay.
       if (isHostTimeoutScheduled) {
@@ -344,6 +353,7 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     }
   } else {
     newTask.sortIndex = expirationTime;
+    // 当前时间大于等于任务开始时间 push到taskQueue
     push(taskQueue, newTask);
     if (enableProfiling) {
       markTaskStart(newTask, currentTime);
@@ -351,6 +361,7 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     }
     // Schedule a host callback, if needed. If we're already performing work,
     // wait until the next time we yield.
+    // 没有任务在执行， 执行requestHostCallback
     if (!isHostCallbackScheduled && !isPerformingWork) {
       isHostCallbackScheduled = true;
       requestHostCallback(flushWork);
@@ -400,13 +411,14 @@ function unstable_shouldYield() {
   advanceTimers(currentTime);
   const firstTask = peek(taskQueue);
   return (
-    (firstTask !== currentTask &&
+    (
+      firstTask !== currentTask &&
       currentTask !== null &&
       firstTask !== null &&
       firstTask.callback !== null &&
       firstTask.startTime <= currentTime &&
-      firstTask.expirationTime < currentTask.expirationTime) ||
-    shouldYieldToHost()
+      firstTask.expirationTime < currentTask.expirationTime
+    ) || shouldYieldToHost()
   );
 }
 

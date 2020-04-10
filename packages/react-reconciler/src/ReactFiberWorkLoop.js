@@ -234,7 +234,8 @@ let workInProgressRoot: FiberRoot | null = null;
 // 正在工作的fiber
 let workInProgress: Fiber | null = null;
 // The expiration time we're rendering
-// ?????? 不懂 ？？？？
+
+// 当前渲染的 fiber expirationTime， 有可能有高优先级的事件进来，会让低优先级的让出， 比如我正在执行低优先级的render任务，这时候有个高优先级的事件进来
 let renderExpirationTime: ExpirationTime = NoWork;
 // Whether to root completed, errored, suspended, etc.
 // root 状态
@@ -267,6 +268,8 @@ let hasUncaughtError = false;
 let firstUncaughtError = null;
 let legacyErrorBoundariesThatAlreadyFailed: Set<mixed> | null = null;
 
+
+// PassiveEffects
 let rootDoesHavePassiveEffects: boolean = false;
 let rootWithPendingPassiveEffects: FiberRoot | null = null;
 let pendingPassiveEffectsRenderPriority: ReactPriorityLevel = NoPriority;
@@ -288,6 +291,7 @@ let rootWithNestedUpdates: FiberRoot | null = null;
 const NESTED_PASSIVE_UPDATE_LIMIT = 50;
 let nestedPassiveUpdateCount: number = 0;
 
+// 打断正则执行的fiber的 fiber，也就是高优先级的fiber
 let interruptedBy: Fiber | null = null;
 
 // Marks the need to reschedule pending interactions at these expiration times
@@ -344,11 +348,6 @@ export function computeExpirationForFiber(
   fiber: Fiber,
   suspenseConfig: null | SuspenseConfig,
 ): ExpirationTime {
-  // export const NoMode = 0b0000;
-  // export const StrictMode = 0b0001;
-  // export const BlockingMode = 0b0010;
-  // export const ConcurrentMode = 0b0100;
-  // export const ProfileMode = 0b1000;
   const mode = fiber.mode;
   // mode 中没有 BlockingMode
   if ((mode & BlockingMode) === NoMode) {
@@ -411,6 +410,7 @@ export function computeExpirationForFiber(
   return expirationTime;
 }
 
+// 调度的入口，变更最终都是走到这里
 export function scheduleUpdateOnFiber(
   fiber: Fiber,
   expirationTime: ExpirationTime,
@@ -418,6 +418,7 @@ export function scheduleUpdateOnFiber(
   checkForNestedUpdates();
   warnAboutRenderPhaseUpdatesInDEV(fiber);
 
+  // 更新父节点的childExpirationTime fiberRootNode
   const root = markUpdateTimeFromFiberToRoot(fiber, expirationTime);
   if (root === null) {
     warnAboutUpdateOnUnmountedFiberInDEV(fiber);
@@ -441,7 +442,7 @@ export function scheduleUpdateOnFiber(
       (executionContext & (RenderContext | CommitContext)) === NoContext
     ) {
       // Register pending interactions on the root to avoid losing traced interaction data.
-      // profile 下 不关注
+      // 在 rootFiber 上注册待处理的交互 ？？？ 其实我没理解这是啥
       schedulePendingInteractions(root, expirationTime);
 
       // This is a legacy edge case. The initial mount of a ReactDOM.render-ed
@@ -466,6 +467,7 @@ export function scheduleUpdateOnFiber(
     schedulePendingInteractions(root, expirationTime);
   }
 
+  // DiscreteEventContext 比如 点击按钮会走到这里，理由不知道？？？
   if (
     (executionContext & DiscreteEventContext) !== NoContext &&
     // Only updates at user-blocking priority or greater are considered
@@ -490,6 +492,7 @@ export function scheduleUpdateOnFiber(
 // work without treating it as a typical update that originates from an event;
 // e.g. retrying a Suspense boundary isn't an update, but it does schedule work
 // on a fiber.
+// 更新父节点的childExpirationTime，返回 fiberRootNode
 // 从当前fiber节点开始遍历父节点，如果父节点的childExpirationTime < expirationTime；parent.childExpirationTime = expirationTime.
 function markUpdateTimeFromFiberToRoot(fiber, expirationTime) {
   // Update the source fiber's expiration time
@@ -567,7 +570,7 @@ function markUpdateTimeFromFiberToRoot(fiber, expirationTime) {
 // 获取下一个过期时间
 // 其实道理是这样的，我们知道越早的时间越大，优先级页越高，所以这里返回的逻辑就是返回root上时间最大的time
 // 1、如果有lastExpiredTime，说明任务已经过期了，只有当任务过期时，会被更改为过期时间（markRootExpiredAtTime方法）
-// 2、如果不是挂起任务,活着任务挂起结束，就返回firstPendingTime
+// 2、如果不是挂起任务,或者任务挂起结束，就返回firstPendingTime
 // 3、如果是任务还在挂起，不是返回max(lastPingedTime, nextKnownPendingLevel), // 这里逻辑就不懂了，不知道为什么
 // 在这里,如果 nextLevel < Idle 而且 firstPendingTime !== max(lastPingedTime, nextKnownPendingLevel)，
 function getNextRootExpirationTimeToWorkOn(root: FiberRoot): ExpirationTime {
@@ -614,7 +617,7 @@ function getNextRootExpirationTimeToWorkOn(root: FiberRoot): ExpirationTime {
 // the next level that the root has work on. This function is called on every
 // update, and right before exiting a task.
 // 每个root都只有一个task，确保root在调度
-// 1、lastExpiredTime，任务到期了，立即执行，return
+// 1、lastExpiredTime，任务到期了/ 有任务在执行，立即执行，return
 // 2、nextexpirationTime === NoWork，没有要执行的任务，return
 // 3、root.callbackNode (执行时才会被设置，说明任务已经在执行了)，重新获取过期时间和优先级，如果新的优先级比较高或者过期时间不一致，则把老的任务取消，开始新的任务
 // 4、新任务开启逻辑，sync 立即执行，否则 执行 root.callbackNode = scheduleCallback(...)
@@ -654,7 +657,7 @@ function ensureRootIsScheduled(root: FiberRoot) {
 
   // If there's an existing render task, confirm it has the correct priority and
   // expiration time. Otherwise, we'll cancel it and schedule a new one.
-  // 如果已经root已经存在render，但是新的优先级比较高，取消老的任务
+  // 如果已经root已经存在render，但是新的优先级比较高，取消老的任务， 没懂 为啥
   if (existingCallbackNode !== null) {
     const existingCallbackPriority = root.callbackPriority;
     const existingCallbackExpirationTime = root.callbackExpirationTime;
@@ -2836,10 +2839,13 @@ function stopInterruptedWorkLoopTimer() {
   interruptedBy = null;
 }
 
+// 判断是否有高优先级任务打断当前正在执行的任务
 function checkForInterruption(
   fiberThatReceivedUpdate: Fiber,
   updateExpirationTime: ExpirationTime,
 ) {
+  //如果任务正在执行，并且异步任务已经执行到一半了，
+  //但是现在需要把执行权交给浏览器，去执行优先级更高的任务
   if (
     enableUserTimingAPI &&
     workInProgressRoot !== null &&
@@ -3179,6 +3185,7 @@ export function markSpawnedWork(expirationTime: ExpirationTime) {
   }
 }
 
+// 在 rootFiber 上注册待处理的交互
 function scheduleInteractions(root, expirationTime, interactions) {
   if (!enableSchedulerTracing) {
     return;

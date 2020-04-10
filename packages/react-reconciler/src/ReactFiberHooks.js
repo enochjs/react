@@ -208,7 +208,7 @@ let currentlyRenderingFiber: Fiber = (null: any);
 // current hook list is the list that belongs to the current fiber. The
 // work-in-progress hook list is a new list that will be added to the
 // work-in-progress fiber.
-// 看这个注释咋就好奇怪呢，也就是说currentHook 和 workInProgressHook 是完全独立的两个list？？？
+// 问： currentHook 和 workInProgressHook 有没有东西可以关联起来？
 let currentHook: Hook | null = null;
 let workInProgressHook: Hook | null = null;
 
@@ -846,7 +846,7 @@ function updateReducer<S, I, A>(
 
     // Mark that the fiber performed work, but only if the new state is
     // different from the current state.
-    // 新的state 和 memoizedState 的时候 设置didReceiveUpdate = true
+    // 新的state 和 memoizedState 的时候 设置 didReceiveUpdate = true
     if (!is(newState, hook.memoizedState)) {
       markWorkInProgressReceivedUpdate();
     }
@@ -1221,6 +1221,7 @@ function mountEffectImpl(fiberEffectTag, hookEffectTag, create, deps): void {
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
   currentlyRenderingFiber.effectTag |= fiberEffectTag;
+  // return effect
   hook.memoizedState = pushEffect(
     HookHasEffect | hookEffectTag,
     create,
@@ -1234,7 +1235,7 @@ function updateEffectImpl(fiberEffectTag, hookEffectTag, create, deps): void {
   const nextDeps = deps === undefined ? null : deps;
   let destroy = undefined;
 
-  // 当前有hook， 
+  // 当前有hook， 没看懂什么场景？？？？
   if (currentHook !== null) {
     const prevEffect = currentHook.memoizedState;
     destroy = prevEffect.destroy;
