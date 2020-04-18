@@ -2914,7 +2914,9 @@ function beginWork(
       // If props or context changed, mark the fiber as having performed work.
       // This may be unset if the props are determined to be equal later (memo).
       didReceiveUpdate = true;
-    } else if (updateExpirationTime < renderExpirationTime) { // 过期时间小于当前时间，也就是没到过期时间
+    } else if (updateExpirationTime < renderExpirationTime) { 
+      // workInProgress.expirationTime < renderExpirationTime，也就是没到过期时间，说明这次变更当前fiber没有涉及到更新
+      // 这种情况下，直接结束工作，子节点也无需遍历了
       didReceiveUpdate = false;
       // This fiber does not have any pending work. Bailout without entering
       // the begin phase. There's still some bookkeeping we that needs to be done

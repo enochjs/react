@@ -78,11 +78,12 @@ var isPerformingWork = false;
 var isHostCallbackScheduled = false;
 var isHostTimeoutScheduled = false;
 
-// 将timerQueue中可以开始的任务放到 taskQueue里
+// 将timerQueue中 currentTime >= startTime的任务放到 taskQueue里
 function advanceTimers(currentTime) {
   // Check for tasks that are no longer delayed and add them to the queue.
   let timer = peek(timerQueue);
   while (timer !== null) {
+    // 取消的任务
     if (timer.callback === null) {
       // Timer was cancelled.
       pop(timerQueue);
@@ -103,6 +104,8 @@ function advanceTimers(currentTime) {
   }
 }
 
+// 延迟工作
+// 如果有task requestHostCallback执行任务， 如果没有，等待时间到最早开始的任务，执行
 function handleTimeout(currentTime) {
   isHostTimeoutScheduled = false;
   advanceTimers(currentTime);
@@ -120,6 +123,8 @@ function handleTimeout(currentTime) {
   }
 }
 
+// 执行工作
+// requestHostCallback // 执行知道时间片结束 || taskend ture/ false  true morework  tasklist 执行完了
 function flushWork(hasTimeRemaining, initialTime) {
   if (enableProfiling) {
     markSchedulerUnsuspended(initialTime);
@@ -127,6 +132,7 @@ function flushWork(hasTimeRemaining, initialTime) {
 
   // We'll need a host callback the next time work is scheduled.
   isHostCallbackScheduled = false;
+  // 之前设置了isHostTimeoutScheduled，但是现在时间已经到了，该任务已经触发，取消 
   if (isHostTimeoutScheduled) {
     // We scheduled a timeout but it's no longer needed. Cancel it.
     isHostTimeoutScheduled = false;
@@ -152,6 +158,7 @@ function flushWork(hasTimeRemaining, initialTime) {
       return workLoop(hasTimeRemaining, initialTime);
     }
   } finally {
+    // 任务执行完之后，重制数据
     currentTask = null;
     currentPriorityLevel = previousPriorityLevel;
     isPerformingWork = false;
@@ -162,32 +169,39 @@ function flushWork(hasTimeRemaining, initialTime) {
   }
 }
 
+// taskQueue   优先级越高越靠前  peek 第一个 task expirationTime = currentTime + 250 / 5000 / 10000, task 时间越小，优先级越高 ture 执行结束
 function workLoop(hasTimeRemaining, initialTime) {
   let currentTime = initialTime;
+  // timeQueue 里面 startTime => taskQueue
   advanceTimers(currentTime);
+  // setState  => task => 
+  // setState => updatestatequeue => sheduleonfiber  => // push task js => 
   currentTask = peek(taskQueue);
   while (
     currentTask !== null && !(enableSchedulerDebugging && isSchedulerPaused)
   ) {
+    // 任务没有过期而且没有时间了，将控制权交给浏览器， 也就是说如果任务过期了，是不会交给浏览器的，如果有大量的过期任务还是会卡，一般不会出现
+    // 过期时间没有到 task 是可以打断的 
     if (
       currentTask.expirationTime > currentTime && (!hasTimeRemaining || shouldYieldToHost())
     ) {
       // This currentTask hasn't expired, and we've reached the deadline.
       break;
     }
+    // shechduleonfiber
     const callback = currentTask.callback;
     if (callback !== null) {
       currentTask.callback = null;
       currentPriorityLevel = currentTask.priorityLevel;
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
       markTaskRun(currentTask, currentTime);
-      // 执行callback，应该在concurrent模式下才会触发
-      const continuationCallback = callback(didUserCallbackTimeout);
+      // 执行callback，应该在concurrent模式下才会触发 fiber
+      const continuationCallback = callback(didUserCallbackTimeout); // shouldYieldToHost return //
       currentTime = getCurrentTime();
       // 如果任务没执行完，标记交出执行权
-      if (typeof continuationCallback === 'function') {
+      if (typeof continuationCallback === 'function') { // taskQueue
         currentTask.callback = continuationCallback;
-        markTaskYield(currentTask, currentTime);
+        markTaskYield(currentTask, currentTime); 
       } else {
         if (enableProfiling) {
           markTaskCompleted(currentTask, currentTime);
@@ -203,13 +217,19 @@ function workLoop(hasTimeRemaining, initialTime) {
       // callback 没有，应该是任务已经取消了
       pop(taskQueue);
     }
+    // 
     currentTask = peek(taskQueue);
   }
-  // Return whether there's additional work
+
+  // 时间片结束了 cu >= deadlineTime
+  // Return whether there's additional work morework
   if (currentTask !== null) {
     return true;
   } else {
     // 如果任务队列执行完了，执行 requestHostTimeout，handleTimeout
+    // timerQueue 3000 => timeout
+    // 
+    // queue  timeQueue  taskQueue需要执行
     let firstTimer = peek(timerQueue);
     if (firstTimer !== null) {
       requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
@@ -298,6 +318,7 @@ function timeoutForPriorityLevel(priorityLevel) {
 
 // 将callcback push 到timerQueue，并开始新的工作
 // 如果都没有任务到时间就 requestHostTimeout， 否则 requestHostCallback
+// fiber 创建task 执行调度 task (callback)
 function unstable_scheduleCallback(priorityLevel, callback, options) {
   var currentTime = getCurrentTime();
 
@@ -333,7 +354,7 @@ function unstable_scheduleCallback(priorityLevel, callback, options) {
     newTask.isQueued = false;
   }
 
-  // 如果startTime > startTime说明是个延迟任务
+  // 如果startTime > startTime说明是个延迟任务 有delay
   if (startTime > currentTime) {
     // This is a delayed task.
     newTask.sortIndex = startTime;

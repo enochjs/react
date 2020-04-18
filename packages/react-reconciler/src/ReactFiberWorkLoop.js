@@ -410,7 +410,6 @@ export function computeExpirationForFiber(
   return expirationTime;
 }
 
-// 调度的入口，变更最终都是走到这里
 export function scheduleUpdateOnFiber(
   fiber: Fiber,
   expirationTime: ExpirationTime,
@@ -560,7 +559,6 @@ function markUpdateTimeFromFiberToRoot(fiber, expirationTime) {
       }
     }
     // Mark that the root has a pending update.
-    // 标记root有一个pending的update
     markRootUpdatedAtTime(root, expirationTime);
   }
 
@@ -757,8 +755,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
 
     // We now have a consistent tree. The next step is either to commit it,
     // or, if something suspended, wait to commit it after a timeout.
-    const finishedWork: Fiber = ((root.finishedWork =
-      root.current.alternate): any);
+    const finishedWork: Fiber = ((root.finishedWork = root.current.alternate): any);
     root.finishedExpirationTime = expirationTime;
     finishConcurrentRender(root, finishedWork, exitStatus, expirationTime);
   }
@@ -1016,7 +1013,7 @@ function performSyncWorkOnRoot(root) {
   const lastExpiredTime = root.lastExpiredTime;
 
   let expirationTime;
-  // 有已过期的任务
+  // 有已过期的任务，执行过的任务
   if (lastExpiredTime !== NoWork) {
     // There's expired work on this root. Check if we have a partial tree
     // that we can reuse.
@@ -1239,7 +1236,7 @@ export function flushControlled(fn: () => mixed): void {
   }
 }
 
-// 将 workInProgress 转移到当前root
+// 当前的执行的root和当前的workInProgressRoot，也就是更高优先级的任务进来了，切换 工作环境，将workInProgressRoot设置为需要执行的root
 function prepareFreshStack(root, expirationTime) {
   root.finishedWork = null;
   root.finishedExpirationTime = NoWork;
@@ -1256,11 +1253,13 @@ function prepareFreshStack(root, expirationTime) {
   if (workInProgress !== null) {
     let interruptedWork = workInProgress.return;
     while (interruptedWork !== null) {
+      // 重制一些任务状态，至于为什么，我不懂？？？？？ 应该是重制各种全局的上下文环境，免得影响新的逻辑判断
       unwindInterruptedWork(interruptedWork);
       interruptedWork = interruptedWork.return;
     }
   }
   workInProgressRoot = root;
+  // 如果 current上有 alternate 就说明是以前执行过的任务继续上一次的工作，如果不是就说明是新的，创建一个
   workInProgress = createWorkInProgress(root.current, null);
   renderExpirationTime = expirationTime;
   workInProgressRootExitStatus = RootIncomplete;
@@ -1474,7 +1473,9 @@ function renderRootSync(root, expirationTime) {
   // If the root or expiration time have changed, throw out the existing stack
   // and prepare a fresh one. Otherwise we'll continue where we left off.
   if (root !== workInProgressRoot || expirationTime !== renderExpirationTime) {
+    // 存储当前的workInProgress信息，切换到新的workInProgress
     prepareFreshStack(root, expirationTime);
+    // startWorkOnPendingInteractions 方法需要我们获得 root 上的 pendingInteractionMap 对象，遍历并执行相关钩子函数，一般提供给 DevTool 等工具使用，不需要了解。
     startWorkOnPendingInteractions(root, expirationTime);
   }
 

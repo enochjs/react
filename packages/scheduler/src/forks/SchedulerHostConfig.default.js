@@ -186,15 +186,23 @@ if (
     }
   };
 
+
+  // postMessage  => 
+  // 执行工作直到 deadline，deadline 为 当前时间加上一帧的时间 yieldInterval = Math.floor(1000 / fps);
   const performWorkUntilDeadline = () => {
+    // 如果有调度任务
     if (scheduledHostCallback !== null) {
+      // 浏览器  window.performance
       const currentTime = getCurrentTime();
       // Yield after `yieldInterval` ms, regardless of where we are in the vsync
       // cycle. This means there's always time remaining at the beginning of
       // the message event.
+      // 浏览器当前页面的当前时间  yieldInterval 时间片
       deadline = currentTime + yieldInterval;
       const hasTimeRemaining = true;
       try {
+        // scheduledHostCallback 就是 scheduler 中 flushWork方法
+        // performWork  UntilDeadline || task end
         const hasMoreWork = scheduledHostCallback(
           hasTimeRemaining,
           currentTime,
@@ -202,10 +210,12 @@ if (
         if (!hasMoreWork) {
           isMessageLoopRunning = false;
           scheduledHostCallback = null;
-        } else {
+        } else { 
+          // 有任务，发一个postMessage，js 主线程结束，控制权交给浏览器，浏览器渲染结束后会触发onmessage方法，再次执行performWorkUntilDeadline
           // If there's more work, schedule the next message event at the end
           // of the preceding one.
-          port.postMessage(null);
+          // js 执行完了
+          port.postMessage(null); 
         }
       } catch (error) {
         // If a scheduler task throws, exit the current browser task so the
@@ -221,10 +231,42 @@ if (
     needsPaint = false;
   };
 
+  
+
+  // task 队列
+
+  // function main () {
+  //   console.log(1111)
+  //   if (hasMoreWork) {
+  //     port.postMessage(null)
+  //   }
+  // }
+
+  // post2.onmessage = main() {
+  //   main()
+  // }
+  // main // js 
+
+  // 现在 js 可控了 
+
+  // js fiber暂停， 时间过期了， port.postMessage(null)
+  // 浏览器拿到控制权 => 
+  // js port 发消息的问题
+
   const channel = new MessageChannel();
+
+  // port 用来发送消息
   const port = channel.port2;
+
+  // port1 接受
   channel.port1.onmessage = performWorkUntilDeadline;
 
+
+  // 贯穿整个调度的
+  // task 执行完了 
+  // 点击按钮，task
+  // callback 
+  //
   requestHostCallback = function(callback) {
     scheduledHostCallback = callback;
     if (!isMessageLoopRunning) {
@@ -237,6 +279,7 @@ if (
     scheduledHostCallback = null;
   };
 
+  // timeout => requestHostCallback
   requestHostTimeout = function(callback, ms) {
     taskTimeoutID = setTimeout(() => {
       callback(getCurrentTime());
